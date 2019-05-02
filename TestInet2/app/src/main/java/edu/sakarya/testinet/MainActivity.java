@@ -26,6 +26,11 @@ import edu.sakarya.testinet.wificontroller.WifiReceiver;
 
 public class MainActivity extends AppCompatActivity implements InternetConnectivityListener {
 
+    //Some Objects
+    SslScanRunnable runnable;
+    Handler handler;
+    WifiManager wifiManager;
+    WifiReceiver wifiReceiver;
     //Components
     private Button scanSslBttn, serviceBttn;
     private TextView textView, scanPercentText, connectStatText, wifiSSID, wifiFrequency, wifiMACText, wifiIPText, wifidBmText, wifiSpeedText;
@@ -33,12 +38,6 @@ public class MainActivity extends AppCompatActivity implements InternetConnectiv
     private Switch wifiSwitch;
     //Values
     private Boolean isConnect = false;
-
-    //Some Objects
-    SslScanRunnable runnable;
-    Handler handler;
-    WifiManager wifiManager;
-    WifiReceiver wifiReceiver;
     private InternetAvailabilityChecker mInternetAvailabilityChecker;
 
     @Override
@@ -78,23 +77,15 @@ public class MainActivity extends AppCompatActivity implements InternetConnectiv
 
         changeStatServiceBttn();
 
-        scanSslBttn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                ScanSsl(v);
-            }
-        });
+        scanSslBttn.setOnClickListener(this::ScanSsl);
 
-        wifiSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                if (isChecked) {
-                    //wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-                    wifiManager.setWifiEnabled(true);
-                } else {
-                    //wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
-                    wifiManager.setWifiEnabled(false);
-                }
+        wifiSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) {
+                //wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+                wifiManager.setWifiEnabled(true);
+            } else {
+                //wifiManager = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+                wifiManager.setWifiEnabled(false);
             }
         });
     }
@@ -132,7 +123,7 @@ public class MainActivity extends AppCompatActivity implements InternetConnectiv
                 wifiSSID.setText(info.getSSID());
                 wifiFrequency.setText(String.valueOf(info.getFrequency()));
                 wifiIPText.setText(String.valueOf(info.getIpAddress()));
-                wifiSpeedText.setText(String.valueOf(info.getLinkSpeed()) + " Mbps");
+                wifiSpeedText.setText(info.getLinkSpeed() + " Mbps");
                 wifidBmText.setText(String.valueOf(info.getRssi()));
                 wifiMACText.setText(String.valueOf(info.getMacAddress()));
             } else {

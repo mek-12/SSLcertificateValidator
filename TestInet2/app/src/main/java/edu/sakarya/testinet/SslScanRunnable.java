@@ -1,18 +1,16 @@
 package edu.sakarya.testinet;
 
 import android.content.Context;
-import android.util.Log;
+import android.os.Handler;
 import android.widget.ImageView;
 import android.widget.TextView;
-
+import android.widget.Toast;
+import java.io.IOException;
 import java.security.cert.Certificate;
-import java.security.cert.CertificateExpiredException;
-import java.security.cert.CertificateNotYetValidException;
 import java.security.cert.X509Certificate;
-import java.text.DecimalFormat;
-
-import android.os.Handler;
-
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Objects;
 import javax.net.SocketFactory;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLSocket;
@@ -20,126 +18,106 @@ import javax.net.ssl.SSLSocket;
 public class SslScanRunnable implements Runnable {
 
 
-    Context context;
-    Handler handler;
-    TextView textView;
-    ImageView imageView;
-    TextView secureStatus;
+  private Context context;
+  private Handler handler;
+  private TextView textView;
+  private ImageView imageView;
+  private TextView secureStatus;
 
-    private static Object LOCK;
-
-
-    DecimalFormat df2;
-
-    private final String[] hosts;
-    private final int port = 443;
-
-    private final double percent;
-    private final int hostsLength;
-
-    double totalPercent = 0.00;
-
-    SocketFactory socketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
+  private static boolean LOCK;
+  private ArrayList<String> fakeHosts = new ArrayList<>();
 
 
-    public SslScanRunnable(Context context, Handler handler, TextView textView, ImageView imageView, TextView secureStatus) {
-        this.context = context;
-        this.handler = handler;
-        this.textView = textView;
-        this.imageView = imageView;
-        this.secureStatus = secureStatus;
-        df2 = new DecimalFormat(".##");
+  private final HashMap<String, String> hosts;
 
-        hosts = new String[]{"google.com", "yandex.com", "twitter.com", "facebook.com", "gmail.com", "eksisozluk.com", "bing.com", "thequardian.com"};
+  private double totalPercent = 0.00;
 
-        hostsLength = hosts.length;
-        percent = (double) 100 / (double) hostsLength;
+  private SocketFactory socketFactory = HttpsURLConnection.getDefaultSSLSocketFactory();
+
+
+  SslScanRunnable(Context context, Handler handler, TextView textView, ImageView imageView,
+      TextView secureStatus) {
+    this.context = context;
+    this.handler = handler;
+    this.textView = textView;
+    this.imageView = imageView;
+    this.secureStatus = secureStatus;
+
+    hosts = new HashMap<>();
+    initHosts();
+  }
+
+  private void initHosts() {
+
+    hosts.put("google.com", "Google Trust Services");
+    hosts.put("yandex.com", "Yandex Certification Authority");
+    hosts.put("twitter.com", "DigiCert");
+    hosts.put("facebook.com", "DigiCert");
+    hosts.put("gmail.com", "Google Trust Services");
+    hosts.put("eksisozluk.com", "Go Daddy");
+    hosts.put("bing.com", "Microsoft");
+    hosts.put("theguardian.com", "GlobalSign");
+  }
+
+  @Override
+  public void run() {
+    if (LOCK) {
+      return;
     }
+    LOCK = true;
+    int correct = 0;
+    fakeHosts.clear();
+    for (String host : hosts.keySet()) {
+      SSLSocket socket;
+      try {
+        int port = 443;
+        socket = (SSLSocket) socketFactory.createSocket(host, port);
+        socket.startHandshake();
 
-    @Override
-    public void run() {
+        Certificate[] certs = socket.getSession().getPeerCertificates();
+        Certificate cert = certs[0];
 
-        if (LOCK == null) {
-            LOCK = new Object();
+        String issuer = ((X509Certificate) cert).getIssuerDN().getName();
+        if (issuer.contains(Objects.requireNonNull(hosts.get(host)))) {
+          correct++;
         } else {
-            return;
+          fakeHosts.add(host);
         }
-        int i = 0;
-        for (totalPercent = 0.00; i < hostsLength; i++) {
-            try {
-                if (totalPercent < 50.00) {
-                    handler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            imageView.setImageResource(R.drawable.ssl);
-                            secureStatus.setText("Not Safe!");
-                        }
-                    });
-                } else {
-                    handler.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            imageView.setImageResource(R.drawable.ssl_ok);
-                            secureStatus.setText("Safe");
-                        }
-                    });
-                }
-                SSLSocket socket = (SSLSocket) socketFactory.createSocket(hosts[i], port);
 
-                socket.startHandshake();
+        double finalCorrect = correct;
+        totalPercent = finalCorrect / hosts.size() * 100;
+        handler.post(() -> textView.setText("%" + totalPercent));
 
-                Certificate[] certs = socket.getSession().getPeerCertificates();
 
-                int certsLength = certs.length;
-                double totalcertPercent = 0.00;
-                for (Certificate cert : certs) {
-                    if (cert instanceof X509Certificate)
-                        try {
-                            ((X509Certificate) cert).checkValidity();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
 
-                            totalcertPercent = (percent) / ((double) certsLength);
-                            //totalcertPercent =percent*(1/certsLength);
-                            final double finaltotalcertPercent = totalcertPercent;
-                            handler.post(new Runnable() {
-
-                                @Override
-                                public void run() {
-                                    totalPercent = totalPercent + finaltotalcertPercent;
-                                    textView.setText(String.valueOf("%" + df2.format(totalPercent)));
-                                }
-                            });
-                            Log.e("Activate", "Certificate is active for current date");
-                        } catch (CertificateExpiredException cee) {
-                            Log.e("Expired", "Certificate is expired");
-                            handler.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    textView.setText(String.valueOf("%" + df2.format(totalPercent)));
-                                }
-                            });
-                        } catch (CertificateNotYetValidException e) {
-                            Log.e("", "######");
-                            Log.e("Error: ", e.getMessage());
-                            handler.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    textView.setText(String.valueOf("%" + df2.format(totalPercent)));
-                                }
-                            });
-                        }
-                }
-            } catch (Exception e) {
-                Log.e("", "######");
-                Log.e("Error", e.getMessage());
-                handler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        textView.setText(String.valueOf("%" + df2.format(totalPercent)));
-                    }
-                });
-            }
+      if (totalPercent != 100.00) {
+        StringBuilder sentHost = new StringBuilder();
+        for (int p = 0; p < fakeHosts.size(); p++) {
+          sentHost.append(fakeHosts.get(p)).append(" ");
 
         }
-        LOCK = null;
+        String sentNot = sentHost.toString();
+        handler.post(() -> {
+          imageView.setImageResource(R.drawable.ssl);
+          if (!sentNot.equals("")) {
+            Toast.makeText(this.context, sentNot, Toast.LENGTH_SHORT).show();
+          }
+
+          secureStatus.setText("Not Safe!");
+        });
+      } else {
+        handler.post(() -> {
+          imageView.setImageResource(R.drawable.ssl_ok);
+          secureStatus.setText("Safe");
+        });
+      }
+
     }
+
+    LOCK = false;
+
+  }
 }
